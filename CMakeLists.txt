@@ -40,6 +40,14 @@ target_link_libraries(${PROJECT_NAME}_pose
   ${EIGEN3_LIBRARIES}
 )
 
+add_executable(${PROJECT_NAME}_path src/tag2path.cpp)
+add_dependencies(${PROJECT_NAME}_path ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_path
+  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}_lib
+  ${EIGEN3_LIBRARIES}
+)
+
 add_executable(${PROJECT_NAME}_odom src/tag2odom.cpp)
 add_dependencies(${PROJECT_NAME}_odom ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME}_odom

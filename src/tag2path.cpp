@@ -4,7 +4,7 @@
  *   This node will subscribe apriltag detection msg from apriltag node and convert to
  * nav_msgs/Path msg in local frame.
  *
- * @date 27/12/2023
+ * @date 29/12/2023
  * @version 1.0.0
  * @Copyright 2023 <siyuanwu99@gmail.com>
  */
@@ -12,16 +12,19 @@
 #include <apriltag_ros/AprilTagDetection.h>
 #include <apriltag_ros/AprilTagDetectionArray.h>
 #include <dithas/utils.h>
-#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <iostream>
 #include <string>
 
-ros::Publisher pose_pub_;
+ros::Publisher path_pub_;
 
 Eigen::Affine3d tf_tag2cam_  = Eigen::Affine3d::Identity();
 Eigen::Affine3d tf_cam2base_ = Eigen::Affine3d::Identity();
+
+nav_msgs::Path path_msg_;
 
 void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
   if (msg.detections.size() > 0) {
@@ -40,29 +43,33 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     tf_tag2world                     = tf_cam2base_ * tf_tag2cam_;
     Eigen::Quaterniond rot_tag2world = Eigen::Quaterniond(tf_tag2world.matrix().block<3, 3>(0, 0));
 
-    nav_msgs::Odometry pose_msg;
-    pose_msg.header.stamp            = ros::Time::now();
-    pose_msg.header.frame_id         = "map";
-    pose_msg.pose.pose.position.x    = tf_tag2world.matrix()(0, 3);
-    pose_msg.pose.pose.position.y    = tf_tag2world.matrix()(1, 3);
-    pose_msg.pose.pose.position.z    = tf_tag2world.matrix()(2, 3);
-    pose_msg.pose.pose.orientation.w = rot_tag2world.w();
-    pose_msg.pose.pose.orientation.x = rot_tag2world.x();
-    pose_msg.pose.pose.orientation.y = rot_tag2world.y();
-    pose_msg.pose.pose.orientation.z = rot_tag2world.z();
-    pose_pub_.publish(pose_msg);
+    geometry_msgs::PoseStamped pose_msg;
+    pose_msg.header.stamp       = ros::Time::now();
+    pose_msg.header.frame_id    = "map";
+    pose_msg.pose.position.x    = tf_tag2world.matrix()(0, 3);
+    pose_msg.pose.position.y    = tf_tag2world.matrix()(1, 3);
+    pose_msg.pose.position.z    = tf_tag2world.matrix()(2, 3);
+    pose_msg.pose.orientation.w = rot_tag2world.w();
+    pose_msg.pose.orientation.x = rot_tag2world.x();
+    pose_msg.pose.orientation.y = rot_tag2world.y();
+    pose_msg.pose.orientation.z = rot_tag2world.z();
+
+    path_msg_.header.stamp    = ros::Time::now();
+    path_msg_.header.frame_id = "map";
+    path_msg_.poses.push_back(pose_msg);
+    path_pub_.publish(path_msg_);
   }
 }
 
 int main(int argc, char *argv[]) {
-  ros::init(argc, argv, "tag2odom");
+  ros::init(argc, argv, "tag2path");
   ros::NodeHandle nh("~");
 
   /** subscribe tag detection msg */
   ros::Subscriber tag_sub = nh.subscribe("tag_detections", 1, tagCallback);
 
   /** publish tag pose msg */
-  pose_pub_ = nh.advertise<nav_msgs::Odometry>("tag_odom", 1);
+  path_pub_ = nh.advertise<nav_msgs::Path>("tag_path", 1);
 
   /** load tf_cam2base from yaml file */
   std::pair<bool, Eigen::Affine3d> tf_cam2base_pair =
@@ -75,6 +82,8 @@ int main(int argc, char *argv[]) {
   }
 
   /* initialize */
+  path_msg_.header.stamp    = ros::Time::now();
+  path_msg_.header.frame_id = "map";
 
   ros::spin();
   return 0;
