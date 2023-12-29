@@ -25,8 +25,8 @@ namespace utils {
  * @return true if the parameter is loaded successfully
  */
 std::pair<bool, Eigen::Affine3d> readTransform(const std::string &param_name) {
-  std::string full_param_name =
-      ros::this_node::getNamespace() + "/" + ros::this_node::getName() + "/" + param_name;
+  std::string full_param_name = ros::this_node::getName() + "/" + param_name;
+  ROS_INFO("Loading %s", full_param_name.c_str());
   Eigen::Affine3d     tf      = Eigen::Affine3d::Identity();
   bool                success = false;
   std::vector<double> param_data;
