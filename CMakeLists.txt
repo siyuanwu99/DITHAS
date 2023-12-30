@@ -25,6 +25,7 @@ include_directories(
 
 add_library(${PROJECT_NAME}_lib
   src/utils.cpp
+  src/se3_solver.cpp
 )
 add_dependencies(${PROJECT_NAME}_lib 
 ${${PROJECT_NAME}_EXPORTED_TARGETS} 
@@ -51,6 +52,14 @@ target_link_libraries(${PROJECT_NAME}_path
 add_executable(${PROJECT_NAME}_odom src/tag2odom.cpp)
 add_dependencies(${PROJECT_NAME}_odom ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME}_odom
+  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}_lib
+  ${EIGEN3_LIBRARIES}
+)
+
+add_executable(${PROJECT_NAME}_solve_test src/tag2odom.cpp)
+add_dependencies(${PROJECT_NAME}_solve_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_solve_test
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}_lib
   ${EIGEN3_LIBRARIES}
