@@ -4,6 +4,8 @@ project(dithas)
 add_compile_options(-std=c++14)
 
 find_package(Eigen3 REQUIRED)
+find_package(Sophus REQUIRED)
+find_package(Ceres REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   std_msgs 
   nav_msgs 
@@ -21,6 +23,8 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
+  ${Sophus_INCLUDE_DIRS}
 )
 
 add_library(${PROJECT_NAME}_lib
@@ -28,9 +32,16 @@ add_library(${PROJECT_NAME}_lib
   src/se3_solver.cpp
 )
 add_dependencies(${PROJECT_NAME}_lib 
-${${PROJECT_NAME}_EXPORTED_TARGETS} 
-${catkin_EXPORTED_TARGETS}
-${EIGEN3_EXPORTED_TARGETS}
+  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${catkin_EXPORTED_TARGETS}
+  ${EIGEN3_EXPORTED_TARGETS}
+  ${CERES_EXPORTED_TARGETS}
+)
+target_link_libraries(${PROJECT_NAME}_lib
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+  ${CERES_LIBRARIES}
+  ${Sophus_LIBRARIES}
 )
 
 add_executable(${PROJECT_NAME}_pose src/tag2pose.cpp)
@@ -57,10 +68,10 @@ target_link_libraries(${PROJECT_NAME}_odom
   ${EIGEN3_LIBRARIES}
 )
 
-add_executable(${PROJECT_NAME}_solve_test src/tag2odom.cpp)
+add_executable(${PROJECT_NAME}_solve_test src/test_solve.cpp)
 add_dependencies(${PROJECT_NAME}_solve_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME}_solve_test
-  ${catkin_LIBRARIES}
   ${PROJECT_NAME}_lib
+  ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )

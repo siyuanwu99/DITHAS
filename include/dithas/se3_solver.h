@@ -71,7 +71,7 @@ class SE3Solver {
     options_.minimizer_type               = ceres::TRUST_REGION;
   }
 
-  ~SE3Solver();
+  ~SE3Solver() {}
 
   bool solve(const std::vector<Vec> &data, const std::vector<Vec> &gt, double eps = 1e-6);
   SE3d getSophusSE3d() const { return tf_; }
