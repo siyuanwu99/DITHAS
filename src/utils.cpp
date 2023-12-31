@@ -24,10 +24,10 @@ namespace utils {
  * @param param_name string
  * @return true if the parameter is loaded successfully
  */
-std::pair<bool, Eigen::Affine3d> readTransform(const std::string &param_name) {
+std::pair<bool, Eigen::Isometry3d> readTransform(const std::string &param_name) {
   std::string full_param_name = ros::this_node::getName() + param_name;
   ROS_INFO("Loading %s", full_param_name.c_str());
-  Eigen::Affine3d     tf      = Eigen::Affine3d::Identity();
+  Eigen::Isometry3d   tf      = Eigen::Isometry3d::Identity();
   bool                success = false;
   std::vector<double> param_data;
   if (ros::param::get(full_param_name, param_data)) {
@@ -52,7 +52,7 @@ std::pair<bool, Eigen::Affine3d> readTransform(const std::string &param_name) {
  *
  * @param tf [TODO:parameter]
  */
-void printTransform(const Eigen::Affine3d &tf) {
+void printTransform(const Eigen::Isometry3d &tf) {
   Eigen::Matrix4d   mat = tf.matrix();
   std::stringstream ss;
 

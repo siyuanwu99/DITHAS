@@ -20,8 +20,8 @@
 
 ros::Publisher pose_pub_;
 
-Eigen::Affine3d tf_tag2cam_  = Eigen::Affine3d::Identity();
-Eigen::Affine3d tf_cam2base_ = Eigen::Affine3d::Identity();
+Eigen::Isometry3d tf_tag2cam_  = Eigen::Isometry3d::Identity();
+Eigen::Isometry3d tf_cam2base_ = Eigen::Isometry3d::Identity();
 
 void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
   if (msg.detections.size() > 0) {
@@ -36,7 +36,7 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     tf_tag2cam_.matrix().block<3, 1>(0, 3) = vec_tag2cam;
     tf_tag2cam_.matrix().block<3, 3>(0, 0) = rot_tag2cam.toRotationMatrix();
 
-    Eigen::Affine3d tf_tag2world;
+    Eigen::Isometry3d tf_tag2world;
     tf_tag2world                     = tf_cam2base_ * tf_tag2cam_;
     Eigen::Quaterniond rot_tag2world = Eigen::Quaterniond(tf_tag2world.matrix().block<3, 3>(0, 0));
 
@@ -65,13 +65,13 @@ int main(int argc, char *argv[]) {
   pose_pub_ = nh.advertise<nav_msgs::Odometry>("tag_odom", 1);
 
   /** load tf_cam2base from yaml file */
-  std::pair<bool, Eigen::Affine3d> tf_cam2base_pair =
+  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair =
       dithas::utils::readTransform("/body_T_cam0/data");
   if (tf_cam2base_pair.first) {
     tf_cam2base_ = tf_cam2base_pair.second;
   } else {
     ROS_ERROR("Failed to load body_T_cam0.");
-    tf_cam2base_ = Eigen::Affine3d::Identity();
+    tf_cam2base_ = Eigen::Isometry3d::Identity();
   }
 
   /* initialize */

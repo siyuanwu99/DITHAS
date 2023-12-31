@@ -20,7 +20,7 @@
 
 ros::Publisher pose_pub_;
 
-Eigen::Affine3d tf_tag2cam_;
+Eigen::Isometry3d tf_tag2cam_;
 
 void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
   if (msg.detections.size() > 0) {
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   pose_pub_ = nh.advertise<geometry_msgs::PoseStamped>("/tag_pose", 1);
 
   /* initialize */
-  tf_tag2cam_ = Eigen::Affine3d::Identity();
+  tf_tag2cam_ = Eigen::Isometry3d::Identity();
 
   ros::spin();
   return 0;

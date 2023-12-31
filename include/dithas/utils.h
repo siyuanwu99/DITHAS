@@ -26,14 +26,14 @@ namespace utils {
  * @return <true, data> if the parameter is loaded successfully
  * @return <false, data> if the parameter is not loaded successfully
  */
-std::pair<bool, Eigen::Affine3d> readTransform(const std::string &param_name);
+std::pair<bool, Eigen::Isometry3d> readTransform(const std::string &param_name);
 
 /**
  * @brief print 4x4 transform matrix
  *
- * @param tf Eigen::Affine3d transform
+ * @param tf Eigen::Isometry3d transform
  */
-void printTransform(const Eigen::Affine3d &tf);
+void printTransform(const Eigen::Isometry3d &tf);
 
 }  // namespace utils
 

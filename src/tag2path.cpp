@@ -21,12 +21,14 @@
 
 ros::Publisher path_pub_;
 
-Eigen::Affine3d tf_tag2cam_  = Eigen::Affine3d::Identity();
-Eigen::Affine3d tf_cam2base_ = Eigen::Affine3d::Identity();
+Eigen::Isometry3d tf_tag2cam_  = Eigen::Isometry3d::Identity();
+Eigen::Isometry3d tf_cam2base_ = Eigen::Isometry3d::Identity();
 
 nav_msgs::Path path_msg_;
+double         t0_;
 
 void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
+  static int idx = 0;
   if (msg.detections.size() > 0) {
     Eigen::Quaterniond rot_tag2cam(msg.detections[0].pose.pose.pose.orientation.w,
                                    msg.detections[0].pose.pose.pose.orientation.x,
@@ -39,7 +41,7 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     tf_tag2cam_.matrix().block<3, 1>(0, 3) = vec_tag2cam;
     tf_tag2cam_.matrix().block<3, 3>(0, 0) = rot_tag2cam.toRotationMatrix();
 
-    Eigen::Affine3d tf_tag2world;
+    Eigen::Isometry3d tf_tag2world;
     tf_tag2world                     = tf_cam2base_ * tf_tag2cam_;
     Eigen::Quaterniond rot_tag2world = Eigen::Quaterniond(tf_tag2world.matrix().block<3, 3>(0, 0));
 
@@ -58,6 +60,9 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     path_msg_.header.frame_id = "map";
     path_msg_.poses.push_back(pose_msg);
     path_pub_.publish(path_msg_);
+    idx++;
+    ROS_INFO("Pose[%d]: %f, %f, %f, %f", idx, pose_msg.pose.position.x, pose_msg.pose.position.y,
+             pose_msg.pose.position.z, pose_msg.header.stamp.toSec() - t0_);
   }
 }
 
@@ -72,18 +77,19 @@ int main(int argc, char *argv[]) {
   path_pub_ = nh.advertise<nav_msgs::Path>("tag_path", 1);
 
   /** load tf_cam2base from yaml file */
-  std::pair<bool, Eigen::Affine3d> tf_cam2base_pair =
+  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair =
       dithas::utils::readTransform("/body_T_cam0/data");
   if (tf_cam2base_pair.first) {
     tf_cam2base_ = tf_cam2base_pair.second;
   } else {
     ROS_ERROR("Failed to load body_T_cam0.");
-    tf_cam2base_ = Eigen::Affine3d::Identity();
+    tf_cam2base_ = Eigen::Isometry3d::Identity();
   }
 
   /* initialize */
   path_msg_.header.stamp    = ros::Time::now();
   path_msg_.header.frame_id = "map";
+  t0_                       = ros::Time::now().toSec();
 
   ros::spin();
   return 0;
