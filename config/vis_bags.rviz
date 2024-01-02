@@ -9,6 +9,7 @@ Panels:
         - /swarm1521
         - /swarm1531
         - /swarm1551
+        - /swarm1551/Odometry1
       Splitter Ratio: 0.5
     Tree Height: 339
   - Class: rviz/Selection
@@ -86,10 +87,10 @@ Visualization Manager:
               Value: true
             Value: true
           Enabled: true
-          Keep: 10
+          Keep: 5
           Name: Odometry
           Position Tolerance: 0.10000000149011612
-          Queue Size: 10
+          Queue Size: 5
           Shape:
             Alpha: 1
             Axes Length: 1
@@ -220,10 +221,10 @@ Visualization Manager:
               Value: true
             Value: true
           Enabled: true
-          Keep: 10
+          Keep: 5
           Name: Odometry
           Position Tolerance: 0.10000000149011612
-          Queue Size: 10
+          Queue Size: 5
           Shape:
             Alpha: 1
             Axes Length: 1
@@ -304,7 +305,7 @@ Visualization Manager:
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Billboards
+          Line Style: Lines
           Line Width: 0.10000000149011612
           Name: PathGlb
           Offset:
@@ -354,7 +355,7 @@ Visualization Manager:
               Value: true
             Value: true
           Enabled: true
-          Keep: 10
+          Keep: 5
           Name: Odometry
           Position Tolerance: 0.10000000149011612
           Queue Size: 10
@@ -433,12 +434,12 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
-          Color: 255; 25; 0
+          Color: 114; 159; 207
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Billboards
+          Line Style: Lines
           Line Width: 0.10000000149011612
           Name: PathGlb
           Offset:

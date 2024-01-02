@@ -33,8 +33,6 @@ bool SE3Solver::solve(const std::vector<Vec> &data, const std::vector<Vec> &gt, 
 
     tf_ = soph;
 
-    // TODO: check the validity of the result
-
     success = true;
   }
 

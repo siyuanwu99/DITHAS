@@ -66,6 +66,7 @@ class SE3Solver {
  public:
   SE3Solver() {
     options_.max_num_iterations           = 100;
+    options_.eta                          = 1e-2;
     options_.linear_solver_type           = ceres::DENSE_QR;
     options_.minimizer_progress_to_stdout = false;
     options_.minimizer_type               = ceres::TRUST_REGION;
