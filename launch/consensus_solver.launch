@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<launch>
+  <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
+
+  <group ns="swarm152">
+    <node pkg="dithas" type="dithas_pose" name="dithas_pose" output="screen">
+      <rosparam file="$(find dithas)/config/body2cam.yaml" command="load"/>
+      <remap from="~tag_detections" to="/swarm152/tag_detections"/>
+    </node>
+
+  </group>
+
+  <group ns="swarm153">
+    <node pkg="dithas" type="dithas_pose" name="dithas_pose" output="screen">
+      <rosparam file="$(find dithas)/config/body2cam.yaml" command="load"/>
+      <remap from="~tag_detections" to="/swarm153/tag_detections"/>
+    </node>
+    <node pkg="dithas" type="consensus_solver" name="consensus_solver" output="screen">
+      <remap from="~tag_obsrv_self" to="/swarm153/dithas_pose/local/points"/>
+      <remap from="~tag_obsrv_glbl" to="/swarm152/dithas_pose/local/points"/>
+    </node>
+  </group>
+
+
+  <group ns="swarm155">
+    <node pkg="dithas" type="dithas_pose" name="dithas_pose" output="screen">
+      <rosparam file="$(find dithas)/config/body2cam.yaml" command="load"/>
+      <remap from="~tag_detections" to="/swarm155/tag_detections"/>
+    </node>
+    <node pkg="dithas" type="consensus_solver" name="consensus_solver" output="screen">
+      <remap from="~tag_obsrv_self" to="/swarm155/dithas_pose/local/points"/>
+      <remap from="~tag_obsrv_glbl" to="/swarm152/dithas_pose/local/points"/>
+    </node>
+  </group>
+
+  <node pkg="rviz" type="rviz" name="vis_bags" args="-d $(find dithas)/config/consensus.rviz" output="screen"/>
+
+</launch>
