@@ -20,6 +20,7 @@
 #include <string>
 
 ros::Publisher path_pub_;
+ros::Publisher pose_pub_;
 
 Eigen::Isometry3d tf_tag2cam_  = Eigen::Isometry3d::Identity();
 Eigen::Isometry3d tf_cam2base_ = Eigen::Isometry3d::Identity();
@@ -55,6 +56,7 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     pose_msg.pose.orientation.x = rot_tag2world.x();
     pose_msg.pose.orientation.y = rot_tag2world.y();
     pose_msg.pose.orientation.z = rot_tag2world.z();
+    pose_pub_.publish(pose_msg);
 
     path_msg_.header.stamp    = ros::Time::now();
     path_msg_.header.frame_id = "map";
@@ -75,6 +77,7 @@ int main(int argc, char *argv[]) {
 
   /** publish tag pose msg */
   path_pub_ = nh.advertise<nav_msgs::Path>("tag_path", 1);
+  pose_pub_ = nh.advertise<geometry_msgs::PoseStamped>("tag_pose", 1);
 
   /** load tf_cam2base from yaml file */
   std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair =

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
+
+  <group ns="swarm155">
+    <node pkg="dithas" type="dithas_path" name="dithas_path" output="screen">
+      <rosparam file="$(find dithas)/config/body2cam.yaml" command="load"/>
+      <remap from="~tag_detections" to="/tag_detections"/>
+      <remap from="~tag_path" to="/estimated_path" />
+      <remap from="~tag_pose" to="/estimated" />
+    </node>
+  </group>
+
+  <node pkg="dithas" type="ground_truth" name="ground_truth" output="screen">
+    <remap from="~caliboard_pose" to="/vrpn_client_node/CaliBoard/pose"/>
+    <remap from="~body_pose" to="/vrpn_client_node/swarm155/pose"/>
+    <remap from="~local_path" to="/ground_truth_path" />
+    <remap from="~local_pose" to="/ground_truth" />
+  </node>
+
+  <node pkg="rviz" type="rviz" name="vis_bags" args="-d $(find dithas)/config/cmp_gt.rviz" output="screen"/>
+
+</launch>
