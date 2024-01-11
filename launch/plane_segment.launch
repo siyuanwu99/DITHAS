@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+  <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
+  <node pkg="dithas" type="plane_segmentation" name="plane_segment" output="screen">
+    <remap from="~point_cloud" to="/cloud_registered"/>
+  </node>
+
+
+  <node pkg="rviz" type="rviz" name="vis_bags" args="-d $(find dithas)/config/plane.rviz" output="screen"/>
+
+</launch>
