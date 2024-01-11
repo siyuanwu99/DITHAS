@@ -9,7 +9,6 @@ Panels:
         - /swarm1521
         - /swarm1531
         - /swarm1551
-        - /swarm1551/Odometry1
       Splitter Ratio: 0.5
     Tree Height: 339
   - Class: rviz/Selection
@@ -280,7 +279,7 @@ Visualization Manager:
               Value: true
             Value: true
           Enabled: true
-          Keep: 5
+          Keep: 1
           Name: OdomGlb
           Position Tolerance: 0.10000000149011612
           Queue Size: 10
@@ -414,7 +413,7 @@ Visualization Manager:
               Value: true
             Value: true
           Enabled: true
-          Keep: 5
+          Keep: 1
           Name: OdomGlb
           Position Tolerance: 0.10000000149011612
           Queue Size: 10
@@ -501,9 +500,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.3953975439071655
+      Pitch: 1.390397548675537
       Target Frame: <Fixed Frame>
-      Yaw: 3.2103981971740723
+      Yaw: 3.2003989219665527
     Saved: ~
 Window Geometry:
   Displays:
@@ -524,4 +523,4 @@ Window Geometry:
     collapsed: false
   Width: 1424
   X: 8
-  Y: 1284
+  Y: 1247

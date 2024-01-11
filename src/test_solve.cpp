@@ -24,7 +24,7 @@
 
 typedef Sophus::SE3d SE3d;
 
-const int BUFFER_SIZE       = 90;
+const int BUFFER_SIZE       = 50;
 double    SOLVE_TIME        = 0.2;
 double    MAX_TEMPORAL_DIFF = 0.050;
 
@@ -35,15 +35,12 @@ double    MAX_TEMPORAL_DIFF = 0.050;
 struct TrajPoint {
   /** default constructor */
   TrajPoint() {
-    pos_  = Eigen::Vector3d::Zero();
-    rot_  = Eigen::Quaterniond::Identity();
-    time_ = 0.0;
+    pos  = Eigen::Vector3d::Zero();
+    time = 0.0;
   }
-  TrajPoint(const Eigen::Vector3d& pos, const Eigen::Quaterniond& rot, const double time)
-      : pos_(pos), rot_(rot), time_(time) {}
-  Eigen::Vector3d    pos_;
-  Eigen::Quaterniond rot_;
-  double             time_;
+  TrajPoint(const Eigen::Vector3d& pos, const double time) : pos(pos), time(time) {}
+  Eigen::Vector3d pos;
+  double          time;
 };
 
 typedef std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> PointPairs;
@@ -52,21 +49,18 @@ typedef std::vector<Eigen::Vector3d>                             Points;
 /** publisher */
 ros::Publisher odom_pub_, path_pub_;
 
-/** tf from tag to camera */
-Eigen::Isometry3d tf_tag2cam_ = Eigen::Isometry3d::Identity();
-
-/** tf from camera to body */
-Eigen::Isometry3d tf_cam2base_ = Eigen::Isometry3d::Identity();
+Eigen::Isometry3d tf_tag2cam_  = Eigen::Isometry3d::Identity(); /** tf from tag to camera */
+Eigen::Isometry3d tf_cam2base_ = Eigen::Isometry3d::Identity(); /** tf from camera to body */
 
 /** buffer for tag detections in body frame */
 std::vector<TrajPoint> buf_odom_self_;
 std::vector<TrajPoint> buf_odom_glbl_;
+PointPairs             aligned_points_;
 
-/** tf from self to global */
-SE3d tf_self2glbl_(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+SE3d tf_self2glbl_(Eigen::Matrix3d::Identity(),
+                   Eigen::Vector3d::Zero()); /** tf from self to global */
 
-/** flag */
-int solve_index_(0);
+int solve_index_(0); /** solver index */
 
 /**
  * @brief odomCallback which save the latest odom msg into buffer
@@ -77,9 +71,8 @@ int solve_index_(0);
 void odomCallback(std::vector<TrajPoint>& buf, const nav_msgs::Odometry& msg) {
   TrajPoint traj_point(
       Eigen::Vector3d(msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z),
-      Eigen::Quaterniond(msg.pose.pose.orientation.w, msg.pose.pose.orientation.x,
-                         msg.pose.pose.orientation.y, msg.pose.pose.orientation.z),
       msg.header.stamp.toSec());
+
   if (buf.size() <= BUFFER_SIZE) {
     buf.push_back(traj_point);
   } else {
@@ -107,7 +100,7 @@ PointPairs getPointPairs(const std::vector<TrajPoint>& src, const std::vector<Tr
     int    closest_idx = -1;
 
     while (j < dst.size()) {
-      double diff = std::abs(src[i].time_ - dst[j].time_);
+      double diff = std::abs(src[i].time - dst[j].time);
       if (diff < min_diff) {
         min_diff    = diff;
         closest_idx = j;
@@ -118,7 +111,7 @@ PointPairs getPointPairs(const std::vector<TrajPoint>& src, const std::vector<Tr
     }
 
     if (min_diff < MAX_TEMPORAL_DIFF) {
-      alignment.push_back(std::make_pair(src[i].pos_, dst[closest_idx].pos_));
+      alignment.push_back(std::make_pair(src[i].pos, dst[closest_idx].pos));
     } else {
       continue;
     }
@@ -205,14 +198,20 @@ void solveCallback(const ros::TimerEvent& event) {
 
   /** step 1: align point pairs stored in the buffer */
   PointPairs aligned_points = getPointPairs(buf_odom_self_, buf_odom_glbl_);
-  Points     self_points, glbl_points;
-  convertPairsToPoints(aligned_points, self_points, glbl_points);
-
-  ROS_INFO("Aligned %lu points.", aligned_points.size());
-  if (self_points.size() < 10) {
-    ROS_WARN("Not enough points to solve tf, skip. (%lu aligned points)", self_points.size());
+  ROS_INFO("Aligned %lu new points.", aligned_points.size());
+  if (aligned_points.size() < 5) {
+    ROS_INFO("Not enough points to update.");
     return;
   }
+
+  aligned_points_.insert(aligned_points_.end(), aligned_points.begin(), aligned_points.end());
+  buf_odom_glbl_.clear();
+  buf_odom_self_.clear();
+
+  Points self_points, glbl_points;
+  convertPairsToPoints(aligned_points_, self_points, glbl_points);
+
+  ROS_INFO("Total %lu points.", aligned_points_.size());
 
   /** step 2: solve the tf from self to global */
   dithas::solver::SE3Solver solver;
