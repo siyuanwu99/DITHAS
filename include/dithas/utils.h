@@ -10,14 +10,12 @@
 #define DITHAS_UTILS_H_
 #include <ros/ros.h>
 #include <Eigen/Dense>
+#include <array>
 #include <iostream>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace dithas {
-
-namespace utils {
 
 /**
  * @brief Read the parameters from the parameter server
@@ -35,7 +33,14 @@ std::pair<bool, Eigen::Isometry3d> readTransform(const std::string &param_name);
  */
 void printTransform(const Eigen::Isometry3d &tf);
 
-}  // namespace utils
+/**
+ * @brief Generate a random RGB color
+ *
+ * @param color std::array<unsigned int, 3>  [Red, Green, Blue]]
+ */
+typedef std::array<unsigned int, 3> RGBColor;
+
+void generateRandomRGBColor(RGBColor &color);
 
 }  // namespace dithas
 

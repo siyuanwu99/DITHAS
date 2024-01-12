@@ -60,8 +60,7 @@ int main(int argc, char *argv[]) {
   pt_pub_ = nh.advertise<geometry_msgs::PointStamped>("local/points", 1);
 
   /** load tf_cam2base from yaml file */
-  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair =
-      dithas::utils::readTransform("/body_T_cam0/data");
+  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair = dithas::readTransform("/body_T_cam0/data");
   if (tf_cam2base_pair.first) {
     tf_cam2base_ = tf_cam2base_pair.second;
   } else {

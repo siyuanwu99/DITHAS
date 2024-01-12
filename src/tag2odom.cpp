@@ -65,8 +65,7 @@ int main(int argc, char *argv[]) {
   pose_pub_ = nh.advertise<nav_msgs::Odometry>("tag_odom", 1);
 
   /** load tf_cam2base from yaml file */
-  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair =
-      dithas::utils::readTransform("/body_T_cam0/data");
+  std::pair<bool, Eigen::Isometry3d> tf_cam2base_pair = dithas::readTransform("/body_T_cam0/data");
   if (tf_cam2base_pair.first) {
     tf_cam2base_ = tf_cam2base_pair.second;
   } else {

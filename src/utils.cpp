@@ -11,11 +11,11 @@
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <iostream>
+#include <random>
 #include <string>
+#include <vector>
 
 namespace dithas {
-
-namespace utils {
 
 /**
  * @brief Read the parameters from the parameter server
@@ -78,6 +78,10 @@ void printTransform(const Eigen::Isometry3d &tf) {
   std::cout << "-------------------------" << std::endl;
 }
 
-}  // namespace utils
+void generateRandomRGBColor(RGBColor &color) {
+  color[0] = static_cast<unsigned int>(rand() % 255);  // Red
+  color[1] = static_cast<unsigned int>(rand() % 255);  // Green
+  color[2] = static_cast<unsigned int>(rand() % 255);  // Blue
+}
 
 }  // namespace dithas
