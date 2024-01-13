@@ -10,6 +10,7 @@
  */
 
 #include <dithas/lidar_common.h>
+#include <dithas/utils.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/common/io.h>
 #include <pcl/common/transforms.h>
@@ -17,11 +18,14 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/principal_curvatures.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/sample_consensus/sac_model_plane.h>
 #include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
@@ -41,13 +45,17 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr edge_clouds_;  // edge clouds in global fra
 std::vector<int>                     edge_counts_;
 
 /* Global parameters */
-int   edge_number_    = 0;
-int   plane_max_size_ = 5;
+int   edge_number_ = 0;
+int   plane_max_num_(5);
+int   plane_min_size_(10);
 float voxel_size_;
 float theta_min_;
 float theta_max_;
 float min_line_dis_threshold_;
 float max_line_dis_threshold_;
+
+float ransac_dis_thres_(0.05);
+int   plane_size_thres_(10);
 
 /**
  * @brief [TODO:description]
@@ -61,7 +69,7 @@ void calcLine(const std::vector<SinglePlane>&               plane_lists,
               const double                                  voxel_size,
               const Eigen::Vector3d                         origin,
               std::vector<pcl::PointCloud<pcl::PointXYZI>>& edge_cloud_lists) {
-  if (plane_lists.size() >= 2 && plane_lists.size() <= plane_max_size_) {
+  if (plane_lists.size() >= 2 && plane_lists.size() <= static_cast<size_t>(plane_max_num_)) {
     pcl::PointCloud<pcl::PointXYZI> temp_line_cloud;
     for (size_t plane_idx1 = 0; plane_idx1 < plane_lists.size() - 1; plane_idx1++) {
       for (size_t plane_idx2 = plane_idx1 + 1; plane_idx2 < plane_lists.size(); plane_idx2++) {
@@ -225,125 +233,236 @@ void calcLine(const std::vector<SinglePlane>&               plane_lists,
 }
 
 /**
- * @brief extract the edge from the plane
+ * @brief initialize the voxel map
  *
+ * @param lidar_cloud [TODO:parameter]
  * @param voxel_map [TODO:parameter]
- * @param ransac_dis_thre [TODO:parameter]
- * @param plane_size_threshold [TODO:parameter]
- * @param lidar_edge_clouds_3d [TODO:parameter]
+ * @param voxel_size [TODO:parameter]
  */
-void LiDAREdgeExtraction(const std::unordered_map<VOXEL_LOC, Voxel*>& voxel_map,
-                         const float                                  ransac_dis_thre,
-                         const int                                    plane_size_threshold,
-                         pcl::PointCloud<pcl::PointXYZI>::Ptr&        lidar_edge_clouds_3d) {
-  ROS_INFO_STREAM("Extracting Lidar Edge");
-  ros::Rate loop(5000);
-  lidar_edge_clouds_3d = pcl::PointCloud<pcl::PointXYZI>::Ptr(new pcl::PointCloud<pcl::PointXYZI>);
-  for (auto iter = voxel_map.begin(); iter != voxel_map.end(); iter++) {
-    if (iter->second->cloud->size() > 50) {
-      std::vector<SinglePlane> plane_lists;
-      // 创建一个体素滤波器
-      pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filter(new pcl::PointCloud<pcl::PointXYZI>);
-      pcl::copyPointCloud(*iter->second->cloud, *cloud_filter);
-      // 创建一个模型参数对象，用于记录结果
-      pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-      // inliers表示误差能容忍的点，记录点云序号
-      pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-      // 创建一个分割器
-      pcl::SACSegmentation<pcl::PointXYZI> seg;
-      // Optional,设置结果平面展示的点是分割掉的点还是分割剩下的点
-      seg.setOptimizeCoefficients(true);
-      // Mandatory-设置目标几何形状
-      seg.setModelType(pcl::SACMODEL_PLANE);
-      // 分割方法：随机采样法
-      seg.setMethodType(pcl::SAC_RANSAC);
-      // 设置误差容忍范围，也就是阈值
-      seg.setDistanceThreshold(ransac_dis_thre);
-      pcl::PointCloud<pcl::PointXYZRGB> color_planner_cloud;
-      int                               plane_index = 0;
-      while (cloud_filter->points.size() > 10) {
-        pcl::PointCloud<pcl::PointXYZI>     planner_cloud;
-        pcl::ExtractIndices<pcl::PointXYZI> extract;
-        // 输入点云
-        seg.setInputCloud(cloud_filter);
-        seg.setMaxIterations(500);
-        // 分割点云
-        seg.segment(*inliers, *coefficients);
-        if (inliers->indices.size() == 0) {
-          ROS_INFO_STREAM("Could not estimate a planner model for the given dataset");
-          break;
-        }
-        extract.setIndices(inliers);
-        extract.setInputCloud(cloud_filter);
-        extract.filter(planner_cloud);
-
-        if (planner_cloud.size() > plane_size_threshold) {
-          pcl::PointCloud<pcl::PointXYZRGB> color_cloud;
-          std::vector<unsigned int>         colors;
-          colors.push_back(static_cast<unsigned int>(rand() % 256));
-          colors.push_back(static_cast<unsigned int>(rand() % 256));
-          colors.push_back(static_cast<unsigned int>(rand() % 256));
-          pcl::PointXYZ p_center(0, 0, 0);
-          for (size_t i = 0; i < planner_cloud.points.size(); i++) {
-            pcl::PointXYZRGB p;
-            p.x = planner_cloud.points[i].x;
-            p.y = planner_cloud.points[i].y;
-            p.z = planner_cloud.points[i].z;
-            p_center.x += p.x;
-            p_center.y += p.y;
-            p_center.z += p.z;
-            p.r = colors[0];
-            p.g = colors[1];
-            p.b = colors[2];
-            color_cloud.push_back(p);
-            color_planner_cloud.push_back(p);
-          }
-          p_center.x = p_center.x / planner_cloud.size();
-          p_center.y = p_center.y / planner_cloud.size();
-          p_center.z = p_center.z / planner_cloud.size();
-          SinglePlane single_plane;
-          single_plane.cloud    = planner_cloud;
-          single_plane.p_center = p_center;
-          single_plane.normal << coefficients->values[0], coefficients->values[1],
-              coefficients->values[2];
-          single_plane.index = plane_index;
-          plane_lists.push_back(single_plane);
-          plane_index++;
-        }
-        extract.setNegative(true);
-        pcl::PointCloud<pcl::PointXYZI> cloud_f;
-        extract.filter(cloud_f);
-        *cloud_filter = cloud_f;
-      }
-      if (plane_lists.size() >= 1) {
-        sensor_msgs::PointCloud2 dbg_msg;
-        pcl::toROSMsg(color_planner_cloud, dbg_msg);
-        dbg_msg.header.frame_id = "camera_init";
-        plane_pub_.publish(dbg_msg);
-        loop.sleep();
-      }
-      std::vector<pcl::PointCloud<pcl::PointXYZI>> edge_cloud_lists;
-      calcLine(plane_lists, voxel_size_, iter->second->voxel_origin, edge_cloud_lists);
-      if (edge_cloud_lists.size() > 0 && edge_cloud_lists.size() <= 5)
-        for (size_t a = 0; a < edge_cloud_lists.size(); a++) {
-          for (size_t i = 0; i < edge_cloud_lists[a].size(); i++) {
-            pcl::PointXYZI p = edge_cloud_lists[a].points[i];
-            edge_clouds_->points.push_back(p);
-            edge_counts_.push_back(edge_number_);
-          }
-          sensor_msgs::PointCloud2 dbg_msg;
-          pcl::toROSMsg(edge_cloud_lists[a], dbg_msg);
-          dbg_msg.header.frame_id = "camera_init";
-          edge_pub_.publish(dbg_msg);
-          loop.sleep();
-          edge_number_++;
-        }
+void initVoxel(pcl::PointCloud<pcl::PointXYZI>::Ptr&  lidar_cloud,
+               std::unordered_map<VOXEL_LOC, Voxel*>& voxel_map,
+               const float                            voxel_size) {
+  ROS_INFO_STREAM("Building Voxel");
+  for (size_t i = 0; i < lidar_cloud->size(); i++) {
+    const pcl::PointXYZI& p_t = lidar_cloud->points[i];
+    Eigen::Vector3d       pt(p_t.x, p_t.y, p_t.z);
+    pcl::PointXYZI        p_c;
+    p_c.x = pt(0);
+    p_c.y = pt(1);
+    p_c.z = pt(2);
+    float loc_xyz[3];
+    for (int j = 0; j < 3; j++) {
+      loc_xyz[j] = p_c.data[j] / voxel_size;
+      if (loc_xyz[j] < 0) loc_xyz[j] -= 1.0;
     }
+    VOXEL_LOC position((int64_t)loc_xyz[0], (int64_t)loc_xyz[1], (int64_t)loc_xyz[2]);
+    auto      iter = voxel_map.find(position);
+    if (iter != voxel_map.end()) {
+      voxel_map[position]->cloud->push_back(p_c);
+    } else {
+      Voxel* voxel                         = new Voxel(voxel_size);
+      voxel_map[position]                  = voxel;
+      voxel_map[position]->voxel_origin[0] = position.x * voxel_size;
+      voxel_map[position]->voxel_origin[1] = position.y * voxel_size;
+      voxel_map[position]->voxel_origin[2] = position.z * voxel_size;
+      voxel_map[position]->cloud->push_back(p_c);
+    }
+  }
+  for (auto iter = voxel_map.begin(); iter != voxel_map.end(); iter++)
+    if (iter->second->cloud->size() > 20) downsampleVoxel(*(iter->second->cloud), 0.03);
+}
+
+/**
+ * @brief [TODO:description]
+ *
+ * @param lidar_cloud [TODO:parameter]
+ */
+void extractLiDARPlane(pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) {
+  ROS_INFO_STREAM("Extracting Lidar Edge");
+  std::vector<SinglePlane>             plane_lists;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+
+  /** preprocess filter out points far away from the lidar */
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_tmp(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PassThrough<pcl::PointXYZI>     pass_x;
+  pass_x.setInputCloud(lidar_cloud);
+  pass_x.setFilterFieldName("z");
+  pass_x.setFilterLimits(0.0, 2.5);
+  pass_x.filter(*cloud_tmp);
+
+  pcl::PassThrough<pcl::PointXYZI> pass_z;
+  pass_z.setInputCloud(cloud_tmp);
+  pass_z.setFilterFieldName("x");
+  pass_z.setFilterLimits(-1.0, 5.0);
+  pass_z.filter(*cloud_filtered);
+
+  cloud_tmp.swap(cloud_filtered);
+
+  pcl::PassThrough<pcl::PointXYZI> pass_y;
+  pass_y.setInputCloud(cloud_tmp);
+  pass_y.setFilterFieldName("y");
+  pass_y.setFilterLimits(-3.0, 3.0);
+  pass_y.filter(*cloud_filtered);
+
+  /** create a KD-tree object for efficient search */
+  pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
+  tree->setInputCloud(cloud_filtered);
+
+  /* cluster the point cloud by Euclidean Distance */
+  std::vector<pcl::PointIndices>                  cluster_indices;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  ec.setClusterTolerance(0.10);
+  ec.setMinClusterSize(20);     // Minimum size of a cluster
+  ec.setMaxClusterSize(25000);  // Maximum size of a cluster
+  ec.setSearchMethod(tree);
+  ec.setInputCloud(cloud_filtered);
+  ec.extract(cluster_indices);
+
+  /** initialize the plane extraction */
+  pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers(new pcl::PointIndices);  // inliers表示误差能容忍的点，记录点云序号
+
+  pcl::SACSegmentation<pcl::PointXYZI> seg;  // 创建一个分割器
+  seg.setOptimizeCoefficients(true);  // Optional,设置结果平面展示的点是分割掉的点还是分割剩下的点
+  seg.setModelType(pcl::SACMODEL_PLANE);        // Mandatory-设置目标几何形状
+  seg.setMethodType(pcl::SAC_RANSAC);           // 分割方法：随机采样法
+  seg.setDistanceThreshold(ransac_dis_thres_);  // 设置误差容忍范围，也就是阈值
+
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr color_cloud_cluster(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+  int cluster_id = 0;
+  for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin();
+       it != cluster_indices.end(); ++it) {
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
+    for (const auto& idx : it->indices) {
+      cloud_cluster->push_back((*cloud_filtered)[idx]);
+    }
+    cloud_cluster->width    = cloud_cluster->size();
+    cloud_cluster->height   = 1;
+    cloud_cluster->is_dense = true;
+
+    /* extract plane from each cluster */
+    pcl::ExtractIndices<pcl::PointXYZI> extract;
+    seg.setInputCloud(cloud_cluster); /** Input point cloud */
+    seg.setMaxIterations(500);
+    seg.segment(*inliers, *coefficients); /**  segment plane from point cloud */
+    if (inliers->indices.size() == 0) {
+      ROS_INFO_STREAM("Could not estimate a planner model for the given dataset");
+      break;
+    }
+
+    extract.setIndices(inliers);
+    extract.setInputCloud(cloud_cluster);
+    extract.filter(*cloud_cluster);
+
+    ROS_INFO("extract plane [%d] extract planner_cloud size: %d", cluster_id,
+             (int)cloud_cluster->size());
+
+    /** Colorize planes */
+    pcl::PointCloud<pcl::PointXYZRGB> color_cloud;
+
+    dithas::RGBColor color;
+    dithas::generateRandomRGBColor(color);
+
+    pcl::PointXYZ p_center(0, 0, 0);
+    for (size_t i = 0; i < cloud_cluster->points.size(); i++) {
+      pcl::PointXYZRGB p;
+      p.x = cloud_cluster->points[i].x;
+      p.y = cloud_cluster->points[i].y;
+      p.z = cloud_cluster->points[i].z;
+      p_center.x += p.x;
+      p_center.y += p.y;
+      p_center.z += p.z;
+      p.r = color[0];
+      p.g = color[1];
+      p.b = color[2];
+      color_cloud.push_back(p);
+      color_cloud_cluster->push_back(p);
+    }
+    p_center.x = p_center.x / cloud_cluster->size();
+    p_center.y = p_center.y / cloud_cluster->size();
+    p_center.z = p_center.z / cloud_cluster->size();
+
+    /** Save plane */
+    SinglePlane single_plane;
+    single_plane.cloud    = *cloud_cluster;
+    single_plane.p_center = p_center;
+    single_plane.normal << coefficients->values[0], coefficients->values[1],
+        coefficients->values[2];
+    single_plane.index = cluster_id;
+    plane_lists.push_back(single_plane);
+    cluster_id++;
+  }
+
+  // while (cloud_filtered->points.size() > 100) {
+  //   pcl::PointCloud<pcl::PointXYZI>     planner_cloud;
+  //   pcl::ExtractIndices<pcl::PointXYZI> extract;
+  //   seg.setInputCloud(cloud_filtered); /** Input point cloud */
+  //   seg.setMaxIterations(500);
+  //   seg.segment(*inliers, *coefficients); /**  segment plane from point cloud */
+  //   if (inliers->indices.size() == 0) {
+  //     ROS_INFO_STREAM("Could not estimate a planner model for the given dataset");
+  //     break;
+  //   }
+  //   extract.setIndices(inliers);
+  //   extract.setInputCloud(cloud_filtered);
+  //   extract.filter(planner_cloud);
+  //
+  //   ROS_INFO("extract plane [%d] extract planner_cloud size: %d", plane_index,
+  //            (int)planner_cloud.size());
+  //
+  //   /** Colorize planes */
+  //   if (planner_cloud.size() > static_cast<size_t>(plane_min_size_)) {
+  //     pcl::PointCloud<pcl::PointXYZRGB> color_cloud;
+  //
+  //     dithas::RGBColor color;
+  //     dithas::generateRandomRGBColor(color);
+  //
+  //     pcl::PointXYZ p_center(0, 0, 0);
+  //     for (size_t i = 0; i < planner_cloud.points.size(); i++) {
+  //       pcl::PointXYZRGB p;
+  //       p.x = planner_cloud.points[i].x;
+  //       p.y = planner_cloud.points[i].y;
+  //       p.z = planner_cloud.points[i].z;
+  //       p_center.x += p.x;
+  //       p_center.y += p.y;
+  //       p_center.z += p.z;
+  //       p.r = color[0];
+  //       p.g = color[1];
+  //       p.b = color[2];
+  //       color_cloud.push_back(p);
+  //       color_planner_cloud.push_back(p);
+  //     }
+  //     p_center.x = p_center.x / planner_cloud.size();
+  //     p_center.y = p_center.y / planner_cloud.size();
+  //     p_center.z = p_center.z / planner_cloud.size();
+  //
+  //     /** Save plane */
+  //     SinglePlane single_plane;
+  //     single_plane.cloud    = planner_cloud;
+  //     single_plane.p_center = p_center;
+  //     single_plane.normal << coefficients->values[0], coefficients->values[1],
+  //         coefficients->values[2];
+  //     single_plane.index = plane_index;
+  //     plane_lists.push_back(single_plane);
+  //     plane_index++;
+  //   }
+  //   extract.setNegative(true);
+  //   pcl::PointCloud<pcl::PointXYZI> cloud_f;
+  //   extract.filter(cloud_f);
+  //   *cloud_filtered = cloud_f;
+  // }
+
+  if (plane_lists.size() >= 1) { /** Publish segmented plane */
+    sensor_msgs::PointCloud2 dbg_msg;
+    pcl::toROSMsg(*color_cloud_cluster, dbg_msg);
+    dbg_msg.header.frame_id = "camera_init";
+    plane_pub_.publish(dbg_msg);
   }
 }
 
 void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::fromROSMsg(*msg, *cloud);
 
   // debug
@@ -357,6 +476,13 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   std::cout << "cloud header frame id: " << cloud->header.frame_id << std::endl;
   std::cout << "cloud header seq: " << cloud->header.seq << std::endl;
   std::cout << "cloud header stamp: " << cloud->header.stamp << std::endl;
+
+  std::unordered_map<VOXEL_LOC, Voxel*> voxel_map;
+
+  ros::Time start = ros::Time::now();
+  extractLiDARPlane(cloud);
+  ROS_INFO_STREAM("Extracting Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
+                                                  << " ms");
 }
 
 int main(int argc, char* argv[]) {
@@ -364,6 +490,13 @@ int main(int argc, char* argv[]) {
   ros::NodeHandle nh("~");
 
   nh.param<float>("voxel_size", voxel_size_, 1);
+  nh.param<float>("theta_min", theta_min_, 0.9);
+  nh.param<float>("theta_max", theta_max_, 0.99);
+  nh.param<float>("min_line_dis_threshold", min_line_dis_threshold_, 0.01);
+  nh.param<float>("max_line_dis_threshold", max_line_dis_threshold_, 0.1);
+  nh.param<int>("plane_max_num", plane_max_num_, 5);
+  nh.param<int>("plane_min_size", plane_min_size_, 10);
+  nh.param<float>("ransac_dis_thres", ransac_dis_thres_, 0.01);
 
   ros::Subscriber sub = nh.subscribe("point_cloud", 1, lidarCallback);
 

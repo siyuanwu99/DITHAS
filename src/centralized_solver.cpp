@@ -295,7 +295,7 @@ void solveCallback(const ros::TimerEvent& event) {
   ROS_INFO("----- Solve %i -----", solve_index_);
 
   /** step 1: align point pairs stored in the buffer */
-  PointPairs aligned_points = getPointPairs(buf_obsrv_self_, buf_obsrv_glbl_);
+  PointPairs aligned_points = getPointPairs(buf_obsrv_1_, buf_obsrv_2_);
   Points     self_points, glbl_points;
   convertPairsToPoints(aligned_points, self_points, glbl_points);
 

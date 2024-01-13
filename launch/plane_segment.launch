@@ -2,6 +2,7 @@
 <launch>
   <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
   <node pkg="dithas" type="plane_segmentation" name="plane_segment" output="screen">
+    <param name="ransac_dis_thres" value="0.01"/>
     <remap from="~point_cloud" to="/cloud_registered"/>
   </node>
 
