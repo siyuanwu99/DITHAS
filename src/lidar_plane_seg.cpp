@@ -30,40 +30,64 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <visualization_msgs/Marker.h>
 #include <Eigen/Dense>
 #include <backward.hpp>  // debug
 #include <iostream>
+#include <queue>
 #include <string>
 
 /* Gloable Variables */
 
 ros::Publisher plane_pub_;
-ros::Publisher edge_pub_;
+ros::Publisher selected_plane_pub_;
 ros::Publisher color_plane_pub_;
 
-pcl::PointCloud<pcl::PointXYZI>::Ptr edge_clouds_;  // edge clouds in global frame
-std::vector<int>                     edge_counts_;
-
 /* Global parameters */
-int   edge_number_ = 0;
 int   plane_max_num_(5);
 int   plane_min_size_(10);
+float board_size_(0.1);
 float voxel_size_;
 float theta_min_;
 float theta_max_;
 float min_line_dis_threshold_;
 float max_line_dis_threshold_;
 
+/** parameters for RANSAC Plane Extraction */
 float ransac_dis_thres_(0.05);
 int   plane_size_thres_(10);
+
+/** parameters for Euclidean Clustering */
+float clustering_tolerance_(0.1);
+int   clustering_min_size_(20);
+
+/**
+ * @class PlaneComparator
+ * @brief comparator for ranking the extracted planes
+ */
+struct PlaneComparator {
+  bool operator()(const SinglePlane& lhs, const SinglePlane& rhs) const {
+    /** Define the function to compare the plane */
+
+    /** lambda function to calculate the distance between center to zero */
+    auto dist_to_zero = [](const pcl::PointXYZ& p) {
+      return sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+    };
+
+    /** lambda function to evalute the size similarity to the template board size */
+    auto cost_to_tmp = [](const pcl::PointCloud<pcl::PointXYZI>& cloud, float board_size) {};
+
+    return dist_to_zero(lhs.p_center) > dist_to_zero(rhs.p_center);
+  }
+};
 
 /**
  * @brief [TODO:description]
  * @param lidar_cloud [TODO:parameter]
  */
-void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) {
+template <class T>
+void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, T& plane_lists) {
   ROS_INFO_STREAM("Extracting Lidar Edge");
-  std::vector<SinglePlane>             plane_lists;
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
 
   /** preprocess filter out points far away from the lidar */
@@ -95,9 +119,9 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) 
   /* cluster the point cloud by Euclidean Distance */
   std::vector<pcl::PointIndices>                  cluster_indices;
   pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
-  ec.setClusterTolerance(0.10);
-  ec.setMinClusterSize(20);     // Minimum size of a cluster
-  ec.setMaxClusterSize(25000);  // Maximum size of a cluster
+  ec.setClusterTolerance(clustering_tolerance_);
+  ec.setMinClusterSize(clustering_min_size_);  // Minimum size of a cluster
+  ec.setMaxClusterSize(25000);                 // Maximum size of a cluster
   ec.setSearchMethod(tree);
   ec.setInputCloud(cloud_filtered);
   ec.extract(cluster_indices);
@@ -145,7 +169,7 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) 
     /** Colorize planes */
     pcl::PointCloud<pcl::PointXYZRGB> color_cloud;
 
-    dithas::RGBColor color;
+    dithas::RGBColor color; /** generate random color */
     dithas::generateRandomRGBColor(color);
 
     pcl::PointXYZ p_center(0, 0, 0);
@@ -174,7 +198,8 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) 
     single_plane.normal << coefficients->values[0], coefficients->values[1],
         coefficients->values[2];
     single_plane.index = cluster_id;
-    plane_lists.push_back(single_plane);
+    plane_lists.push(single_plane);
+    // plane_lists.push_back(single_plane);
     cluster_id++;
   }
   if (plane_lists.size() >= 1) { /** Publish segmented plane */
@@ -185,6 +210,50 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud) 
   }
 }
 
+void filterPLane(const std::vector<SinglePlane>& plane_lists, float board_size) {
+  double min_cost = std::numeric_limits<double>::max();
+  return;
+}
+
+void visualizePlane(const SinglePlane& plane) {
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = "camera_init";
+  marker.header.stamp    = ros::Time::now();
+
+  marker.id     = 0;
+  marker.type   = visualization_msgs::Marker::CUBE;
+  marker.action = visualization_msgs::Marker::ADD;
+
+  marker.pose.position.x = plane.p_center.x;
+  marker.pose.position.y = plane.p_center.y;
+  marker.pose.position.z = plane.p_center.z;
+
+  // Use normal to calculate the orientation
+  Eigen::Vector3d    rot_axis = Eigen::Vector3d::UnitZ().cross(plane.normal);
+  double             angle    = acos(Eigen::Vector3d::UnitZ().dot(plane.normal));
+  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, rot_axis));
+
+  marker.pose.orientation.x = q.x();
+  marker.pose.orientation.y = q.y();
+  marker.pose.orientation.z = q.z();
+  marker.pose.orientation.w = q.w();
+
+  marker.scale.x = 0.2;
+  marker.scale.y = 0.2;
+  marker.scale.z = 0.01;
+
+  marker.color.a = 0.5;
+  marker.color.r = 0.0;
+  marker.color.g = 1.0;
+  marker.color.b = 0.0;
+  // marker.lifetime = ros::Duration(1.0);
+  selected_plane_pub_.publish(marker);
+}
+
+/**
+ * @brief lidar callback function with all the processing
+ * @param msg point cloud msg from lidar
+ */
 void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::fromROSMsg(*msg, *cloud);
@@ -204,9 +273,21 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   std::unordered_map<VOXEL_LOC, Voxel*> voxel_map;
 
   ros::Time start = ros::Time::now();
-  extractLiDARPlane(cloud);
+  /** 1. extract plane from point cloud */
+  std::priority_queue<SinglePlane, std::vector<SinglePlane>, PlaneComparator> plane_lists;
+  extractLiDARPlane(cloud, plane_lists);
   ROS_INFO_STREAM("Extracting Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
                                                   << " ms");
+
+  start = ros::Time::now();
+  /** 2. filter out the desired board and calculate the center */
+  // filterPlanes(plane_lists, board_size_);
+  SinglePlane selected_plane = plane_lists.top();
+  visualizePlane(selected_plane);
+  ROS_INFO_STREAM("Filtering Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
+                                                 << " ms");
+
+  /** 3. EKF track board trajectories */
 }
 
 int main(int argc, char* argv[]) {
@@ -216,6 +297,9 @@ int main(int argc, char* argv[]) {
   nh.param<float>("voxel_size", voxel_size_, 1);
   nh.param<float>("theta_min", theta_min_, 0.9);
   nh.param<float>("theta_max", theta_max_, 0.99);
+  nh.param<float>("board_size", board_size_, 0.1);
+  nh.param<float>("clustering_tolerance", clustering_tolerance_, 0.1);
+  nh.param<int>("clustering_min_size", clustering_min_size_, 20);
   nh.param<float>("min_line_dis_threshold", min_line_dis_threshold_, 0.01);
   nh.param<float>("max_line_dis_threshold", max_line_dis_threshold_, 0.1);
   nh.param<int>("plane_max_num", plane_max_num_, 5);
@@ -225,8 +309,9 @@ int main(int argc, char* argv[]) {
   ros::Subscriber sub = nh.subscribe("point_cloud", 1, lidarCallback);
 
   plane_pub_       = nh.advertise<sensor_msgs::PointCloud2>("/voxel_plane", 100);
-  edge_pub_        = nh.advertise<sensor_msgs::PointCloud2>("/lidar_edge", 100);
   color_plane_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/color_cloud", 100);
+
+  selected_plane_pub_ = nh.advertise<visualization_msgs::Marker>("/selected_plane", 100);
 
   ros::spin();
   return 0;

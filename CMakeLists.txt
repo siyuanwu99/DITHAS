@@ -21,6 +21,7 @@ catkin_package(
   geometry_msgs
   sensor_msgs
   apriltag_ros
+  visualization_msgs
   tf2
   pcl_conversions)
 
@@ -28,7 +29,8 @@ include_directories(
   include ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS}
   ${Sophus_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
-add_library(${PROJECT_NAME}_lib src/utils.cpp src/se3_solver.cpp src/lidar_common.cpp)
+add_library(${PROJECT_NAME}_lib src/utils.cpp src/se3_solver.cpp
+                                src/lidar_common.cpp)
 add_dependencies(
   ${PROJECT_NAME}_lib ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS} ${EIGEN3_EXPORTED_TARGETS}
@@ -82,4 +84,3 @@ add_dependencies(plane_segmentation ${${PROJECT_NAME}_EXPORTED_TARGETS}
                  ${catkin_EXPORTED_TARGETS})
 target_link_libraries(plane_segmentation ${PROJECT_NAME}_lib
                       ${catkin_LIBRARIES})
-
