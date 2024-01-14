@@ -33,6 +33,7 @@
 #include <visualization_msgs/Marker.h>
 #include <Eigen/Dense>
 #include <backward.hpp>  // debug
+#include <dithas/dbscan.hpp>
 #include <iostream>
 #include <queue>
 #include <string>
@@ -77,9 +78,37 @@ struct PlaneComparator {
     /** lambda function to evalute the size similarity to the template board size */
     auto cost_to_tmp = [](const pcl::PointCloud<pcl::PointXYZI>& cloud, float board_size) {};
 
-    return dist_to_zero(lhs.p_center) > dist_to_zero(rhs.p_center);
+    return dist_to_zero(lhs.p_center) > dist_to_zero(rhs.p_center); /** we use dist to zero here */
   }
 };
+
+pcl::PointCloud<PointType>::Ptr preprocessing(const pcl::PointCloud<PointType>::Ptr& lidar_cloud) {
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_tmp(new pcl::PointCloud<pcl::PointXYZI>);
+
+  /** preprocess filter out points far away from the lidar */
+  pcl::PassThrough<pcl::PointXYZI> pass_x;
+  pass_x.setInputCloud(lidar_cloud);
+  pass_x.setFilterFieldName("z");
+  pass_x.setFilterLimits(0.0, 2.5);
+  pass_x.filter(*cloud_filtered);
+
+  cloud_tmp.swap(cloud_filtered);
+  pcl::PassThrough<pcl::PointXYZI> pass_z;
+  pass_z.setInputCloud(cloud_tmp);
+  pass_z.setFilterFieldName("x");
+  pass_z.setFilterLimits(-1.0, 5.0);
+  pass_z.filter(*cloud_filtered);
+
+  cloud_tmp.swap(cloud_filtered);
+  pcl::PassThrough<pcl::PointXYZI> pass_y;
+  pass_y.setInputCloud(cloud_tmp);
+  pass_y.setFilterFieldName("y");
+  pass_y.setFilterLimits(-3.0, 3.0);
+  pass_y.filter(*cloud_filtered);
+
+  return cloud_filtered;
+}
 
 /**
  * @brief [TODO:description]
@@ -88,43 +117,29 @@ struct PlaneComparator {
 template <class T>
 void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, T& plane_lists) {
   ROS_INFO_STREAM("Extracting Lidar Edge");
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
-
-  /** preprocess filter out points far away from the lidar */
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_tmp(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::PassThrough<pcl::PointXYZI>     pass_x;
-  pass_x.setInputCloud(lidar_cloud);
-  pass_x.setFilterFieldName("z");
-  pass_x.setFilterLimits(0.0, 2.5);
-  pass_x.filter(*cloud_tmp);
-
-  pcl::PassThrough<pcl::PointXYZI> pass_z;
-  pass_z.setInputCloud(cloud_tmp);
-  pass_z.setFilterFieldName("x");
-  pass_z.setFilterLimits(-1.0, 5.0);
-  pass_z.filter(*cloud_filtered);
-
-  cloud_tmp.swap(cloud_filtered);
-
-  pcl::PassThrough<pcl::PointXYZI> pass_y;
-  pass_y.setInputCloud(cloud_tmp);
-  pass_y.setFilterFieldName("y");
-  pass_y.setFilterLimits(-3.0, 3.0);
-  pass_y.filter(*cloud_filtered);
 
   /** create a KD-tree object for efficient search */
   pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
-  tree->setInputCloud(cloud_filtered);
+  tree->setInputCloud(lidar_cloud);
 
-  /* cluster the point cloud by Euclidean Distance */
-  std::vector<pcl::PointIndices>                  cluster_indices;
-  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
-  ec.setClusterTolerance(clustering_tolerance_);
-  ec.setMinClusterSize(clustering_min_size_);  // Minimum size of a cluster
-  ec.setMaxClusterSize(25000);                 // Maximum size of a cluster
-  ec.setSearchMethod(tree);
-  ec.setInputCloud(cloud_filtered);
-  ec.extract(cluster_indices);
+  /* cluster the point cloud */
+  std::vector<pcl::PointIndices> cluster_indices;
+  // pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;  // Cluster by Euclidean Distance
+  // ec.setClusterTolerance(clustering_tolerance_);
+  // ec.setMinClusterSize(clustering_min_size_);  // Minimum size of a cluster
+  // ec.setMaxClusterSize(25000);                 // Maximum size of a cluster
+  // ec.setSearchMethod(tree);
+  // ec.setInputCloud(lidar_cloud);
+  // ec.extract(cluster_indices);
+
+  DBSCANKdtreeCluster<pcl::PointXYZI> dbscan;  // Cluster by DBSCAN
+  dbscan.setCorePointMinPts(20);
+  dbscan.setClusterTolerance(clustering_tolerance_);
+  dbscan.setMinClusterSize(clustering_min_size_);  // Minimum size of a cluster
+  dbscan.setMaxClusterSize(25000);                 // Maximum size of a cluster
+  dbscan.setSearchMethod(tree);
+  dbscan.setInputCloud(lidar_cloud);
+  dbscan.extract(cluster_indices);
 
   /** initialize the plane extraction */
   pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
@@ -143,7 +158,7 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, 
        it != cluster_indices.end(); ++it) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZI>);
     for (const auto& idx : it->indices) {
-      cloud_cluster->push_back((*cloud_filtered)[idx]);
+      cloud_cluster->push_back((*lidar_cloud)[idx]);
     }
     cloud_cluster->width    = cloud_cluster->size();
     cloud_cluster->height   = 1;
@@ -270,17 +285,18 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   std::cout << "cloud header seq: " << cloud->header.seq << std::endl;
   std::cout << "cloud header stamp: " << cloud->header.stamp << std::endl;
 
-  std::unordered_map<VOXEL_LOC, Voxel*> voxel_map;
+  /** 1. preprocess the point cloud */
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_processed = preprocessing(cloud);
 
   ros::Time start = ros::Time::now();
-  /** 1. extract plane from point cloud */
+  /** 2. extract plane from point cloud */
   std::priority_queue<SinglePlane, std::vector<SinglePlane>, PlaneComparator> plane_lists;
-  extractLiDARPlane(cloud, plane_lists);
+  extractLiDARPlane(cloud_processed, plane_lists);
   ROS_INFO_STREAM("Extracting Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
                                                   << " ms");
 
   start = ros::Time::now();
-  /** 2. filter out the desired board and calculate the center */
+  /** 3. filter out the desired board and calculate the center */
   // filterPlanes(plane_lists, board_size_);
   SinglePlane selected_plane = plane_lists.top();
   visualizePlane(selected_plane);
