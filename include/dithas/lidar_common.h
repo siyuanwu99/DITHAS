@@ -12,6 +12,8 @@
 #ifndef LIDAR_COMMON_H_
 #define LIDAR_COMMON_H_
 #include <pcl/common/common.h>
+#include <pcl/common/pca.h>
+#include <pcl/pcl_base.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
@@ -95,7 +97,10 @@ typedef struct SinglePlane {
   pcl::PointCloud<pcl::PointXYZI> cloud;
   pcl::PointXYZ                   p_center;
   Eigen::Vector3d                 normal;
-  int                             index;
+
+  int   index;
+  float width;
+  float height;
 } SinglePlane;
 
 /**
@@ -151,8 +156,17 @@ void calc(T matrix[4][5], Eigen::Vector3d& solution) {
  * @brief downsample the point cloud with voxel size
  *
  * @param pc point cloud input
+ * @#param center center of the point cloud
  * @param voxel_size voxel size
  */
-void downsampleVoxel(pcl::PointCloud<PointType>& pc, double voxel_size);
+void downsampleVoxel(pcl::PointCloud<PointType>& pc, PointType center, double voxel_size);
+
+/**
+ * @brief extract the width and height from the point cloud and its normal by PCA algorithm
+ * @return <width, height> (width > height)
+ */
+std::pair<double, double> getWidthHeight(pcl::PointCloud<PointType>::Ptr& pc, /** point cloud */
+                                         const pcl::PointXYZ&             center,
+                                         const Eigen::Vector3d&           normal);
 
 #endif  // LIDAR_COMMON_H_

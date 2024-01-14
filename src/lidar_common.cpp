@@ -55,3 +55,36 @@ void downsampleVoxel(pcl::PointCloud<PointType>& pc, double voxel_size) {
     i++;
   }
 }
+
+std::pair<double, double> getWidthHeight(pcl::PointCloud<PointType>::Ptr& pc,
+                                         const pcl::PointXYZ&             center,
+                                         const Eigen::Vector3d&           normal) {
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pc_projected(new pcl::PointCloud<pcl::PointXYZ>);
+  pc_projected->resize(pc->size());
+  for (auto& p : pc->points) {
+    pcl::PointXYZ pp;
+    pp.x = p.x - center.x;
+    pp.y = p.y - center.y;
+    pp.z = p.z - center.z;
+    pc_projected->push_back(pp);
+  }
+
+  pcl::PCA<pcl::PointXYZ> pca;
+  pca.setInputCloud(pc_projected);
+  Eigen::Vector3f eigen_values  = pca.getEigenValues();
+  Eigen::Matrix3f eigen_vectors = pca.getEigenVectors();
+
+  // std::cout << "Eigen values: " << eigen_values.transpose() << std::endl;
+  // std::cout << "eigen vectors: " << eigen_vectors << std::endl;
+
+  double width, height;
+  for (const auto& pp : pc_projected->points) {
+    Eigen::Vector3f p(pp.x, pp.y, pp.z);
+    double          dot = p.dot(eigen_vectors.col(0));
+    if (dot > width) width = dot;
+    dot = p.dot(eigen_vectors.col(1));
+    if (dot > height) height = dot;
+  }
+
+  return std::make_pair(width, height);
+}

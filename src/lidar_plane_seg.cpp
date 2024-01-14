@@ -11,6 +11,7 @@
 
 #include <dithas/lidar_common.h>
 #include <dithas/utils.h>
+#include <nav_msgs/Odometry.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/common/io.h>
 #include <pcl/common/transforms.h>
@@ -43,6 +44,7 @@
 ros::Publisher plane_pub_;
 ros::Publisher selected_plane_pub_;
 ros::Publisher color_plane_pub_;
+ros::Publisher pose_pub_;
 
 /* Global parameters */
 int   plane_max_num_(5);
@@ -76,8 +78,11 @@ struct PlaneComparator {
     };
 
     /** lambda function to evalute the size similarity to the template board size */
-    auto cost_to_tmp = [](const pcl::PointCloud<pcl::PointXYZI>& cloud, float board_size) {};
+    auto cost_to_tmp = [](const SinglePlane& plane, float board_size) {
 
+    };  // TODO: filtering w.r.t. size of the plane
+
+    /** we would like the plane with lower cost */
     return dist_to_zero(lhs.p_center) > dist_to_zero(rhs.p_center); /** we use dist to zero here */
   }
 };
@@ -133,7 +138,7 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, 
   // ec.extract(cluster_indices);
 
   DBSCANKdtreeCluster<pcl::PointXYZI> dbscan;  // Cluster by DBSCAN
-  dbscan.setCorePointMinPts(20);
+  dbscan.setCorePointMinPts(30);
   dbscan.setClusterTolerance(clustering_tolerance_);
   dbscan.setMinClusterSize(clustering_min_size_);  // Minimum size of a cluster
   dbscan.setMaxClusterSize(25000);                 // Maximum size of a cluster
@@ -208,15 +213,32 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, 
 
     /** Save plane */
     SinglePlane single_plane;
+    single_plane.index    = cluster_id;
     single_plane.cloud    = *cloud_cluster;
     single_plane.p_center = p_center;
     single_plane.normal << coefficients->values[0], coefficients->values[1],
         coefficients->values[2];
-    single_plane.index = cluster_id;
+
+    std::pair<double, double> width_height =
+        getWidthHeight(cloud_cluster, p_center, single_plane.normal);
+    single_plane.width  = width_height.first;
+    single_plane.height = width_height.second;
+
+    if (single_plane.width < 0.5 * board_size_ || single_plane.height < 0.5 * board_size_ ||
+        single_plane.width > 2.5 * board_size_ || single_plane.height > 2.5 * board_size_) {
+      continue;
+    }
+
+    // std::cout << "Getting plane at: " << single_plane.p_center
+    //           << " with normal: " << single_plane.normal.transpose()
+    //           << " width: " << single_plane.width << " height: " << single_plane.height
+    //           << std::endl;
+
     plane_lists.push(single_plane);
     // plane_lists.push_back(single_plane);
     cluster_id++;
   }
+
   if (plane_lists.size() >= 1) { /** Publish segmented plane */
     sensor_msgs::PointCloud2 dbg_msg;
     pcl::toROSMsg(*color_cloud_cluster, dbg_msg);
@@ -253,8 +275,8 @@ void visualizePlane(const SinglePlane& plane) {
   marker.pose.orientation.z = q.z();
   marker.pose.orientation.w = q.w();
 
-  marker.scale.x = 0.2;
-  marker.scale.y = 0.2;
+  marker.scale.x = 2 * plane.width;
+  marker.scale.y = 2 * plane.height;
   marker.scale.z = 0.01;
 
   marker.color.a = 0.5;
@@ -292,6 +314,11 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   /** 2. extract plane from point cloud */
   std::priority_queue<SinglePlane, std::vector<SinglePlane>, PlaneComparator> plane_lists;
   extractLiDARPlane(cloud_processed, plane_lists);
+
+  if (plane_lists.empty()) {
+    ROS_INFO_STREAM("No plane extracted");
+    return;
+  }
   ROS_INFO_STREAM("Extracting Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
                                                   << " ms");
 
@@ -304,6 +331,24 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
                                                  << " ms");
 
   /** 3. EKF track board trajectories */
+
+  /** 4. publish the center of the plane */
+  nav_msgs::Odometry pose_msg;
+  pose_msg.header.frame_id         = "map";
+  pose_msg.header.stamp            = ros::Time::now();
+  pose_msg.pose.pose.position.x    = selected_plane.p_center.x;
+  pose_msg.pose.pose.position.y    = selected_plane.p_center.y;
+  pose_msg.pose.pose.position.z    = selected_plane.p_center.z;
+  pose_msg.pose.pose.orientation.w = 1.0;
+
+  Eigen::Vector3d    rot_axis = Eigen::Vector3d::UnitX().cross(selected_plane.normal);
+  double             angle    = acos(Eigen::Vector3d::UnitX().dot(selected_plane.normal));
+  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, rot_axis));
+  pose_msg.pose.pose.orientation.x = q.x();
+  pose_msg.pose.pose.orientation.y = q.y();
+  pose_msg.pose.pose.orientation.z = q.z();
+  pose_msg.pose.pose.orientation.w = q.w();
+  pose_pub_.publish(pose_msg);
 }
 
 int main(int argc, char* argv[]) {
@@ -320,11 +365,12 @@ int main(int argc, char* argv[]) {
   nh.param<float>("max_line_dis_threshold", max_line_dis_threshold_, 0.1);
   nh.param<int>("plane_max_num", plane_max_num_, 5);
   nh.param<int>("plane_min_size", plane_min_size_, 10);
-  nh.param<float>("ransac_dis_thres", ransac_dis_thres_, 0.01);
+  nh.param<float>("ransac_dis_thres", ransac_dis_thres_, 0.1);
 
   ros::Subscriber sub = nh.subscribe("point_cloud", 1, lidarCallback);
 
   plane_pub_       = nh.advertise<sensor_msgs::PointCloud2>("/voxel_plane", 100);
+  pose_pub_        = nh.advertise<nav_msgs::Odometry>("plane_odom", 100);
   color_plane_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/color_cloud", 100);
 
   selected_plane_pub_ = nh.advertise<visualization_msgs::Marker>("/selected_plane", 100);

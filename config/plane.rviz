@@ -9,6 +9,8 @@ Panels:
         - /PointCloud21
         - /Axes1
         - /VoxelPlane1
+        - /Odometry1
+        - /Odometry1/Shape1
       Splitter Ratio: 0.5
     Tree Height: 971
   - Class: rviz/Selection
@@ -127,6 +129,41 @@ Visualization Manager:
         "": true
       Queue Size: 100
       Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 100
+      Name: Odometry
+      Position Tolerance: 0.10000000149011612
+      Queue Size: 10
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 25; 0
+        Head Length: 0.10000000149011612
+        Head Radius: 0.029999999329447746
+        Shaft Length: 0.10000000149011612
+        Shaft Radius: 0.009999999776482582
+        Value: Arrow
+      Topic: /plane_segment/plane_odom
+      Unreliable: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -155,7 +192,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.604705333709717
+      Distance: 2.4094016551971436
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -163,17 +200,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.7182031869888306
-        Y: -0.9774104952812195
-        Z: 0.08027726411819458
+        X: 0.8389901518821716
+        Y: -1.1343327760696411
+        Z: 0.08046583086252213
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7747959494590759
+      Pitch: 0.8597971200942993
       Target Frame: <Fixed Frame>
-      Yaw: 4.307226181030273
+      Yaw: 3.152240514755249
     Saved: ~
 Window Geometry:
   Displays:

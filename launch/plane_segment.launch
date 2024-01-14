@@ -2,10 +2,11 @@
 <launch>
   <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
   <node pkg="dithas" type="plane_segmentation" name="plane_segment" output="screen">
-    <param name="ransac_dis_thres" value="0.01"/>
+    <param name="ransac_dis_thres" value="0.1"/>
     <remap from="~point_cloud" to="/cloud_registered"/>
   </node>
 
+  <node pkg="tf" type="static_transform_publisher" name="tf_plane" args="0 0 0 0 0 0 1 /camera_init /map 100" output="screen"/>
 
   <node pkg="rviz" type="rviz" name="vis_bags" args="-d $(find dithas)/config/plane.rviz" output="screen"/>
 
