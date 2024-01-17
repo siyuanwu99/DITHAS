@@ -81,8 +81,18 @@ void odomCallback(std::vector<TrajPoint>& buf, const nav_msgs::Odometry& msg) {
   }
 }
 
-void odomSelfCallback(const nav_msgs::Odometry& msg) { odomCallback(buf_odom_self_, msg); }
-void odomGlblCallback(const nav_msgs::Odometry& msg) { odomCallback(buf_odom_glbl_, msg); }
+void odomSelfCallback(const nav_msgs::Odometry& msg) {
+  odomCallback(buf_odom_self_, msg);
+  std::cout << "local: " << msg.header.stamp.toSec() - 1.704719591e9
+            << " pos: " << msg.pose.pose.position.x << " " << msg.pose.pose.position.y << " "
+            << msg.pose.pose.position.z << std::endl;
+}
+void odomGlblCallback(const nav_msgs::Odometry& msg) {
+  odomCallback(buf_odom_glbl_, msg);
+  std::cout << "global: " << msg.header.stamp.toSec() - 1.704719591e9
+            << " pos: " << msg.pose.pose.position.x << " " << msg.pose.pose.position.y << " "
+            << msg.pose.pose.position.z << std::endl;
+}
 
 /**
  * @brief get aligned point pairs from two trajectories
@@ -200,7 +210,7 @@ void solveCallback(const ros::TimerEvent& event) {
   PointPairs aligned_points = getPointPairs(buf_odom_self_, buf_odom_glbl_);
   ROS_INFO("Aligned %lu new points.", aligned_points.size());
   if (aligned_points.size() < 5) {
-    ROS_INFO("Not enough points to update.");
+    ROS_INFO("Not enough points to update. Aligned %lu in total.", aligned_points_.size());
     return;
   }
 
