@@ -337,7 +337,7 @@ Visualization Manager:
           Topic: /swarm153/dithas_solver/rst_odom
           Unreliable: false
           Value: true
-        - Alpha: 1
+        - Alpha: 0.699999988079071
           Buffer Length: 1
           Class: rviz/Path
           Color: 255; 25; 0
@@ -345,8 +345,8 @@ Visualization Manager:
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.10000000149011612
+          Line Style: Billboards
+          Line Width: 0.05000000074505806
           Name: PathGlb
           Offset:
             X: 0
@@ -487,7 +487,7 @@ Visualization Manager:
           Topic: /swarm155/dithas_solver/rst_odom
           Unreliable: false
           Value: true
-        - Alpha: 1
+        - Alpha: 0.699999988079071
           Buffer Length: 1
           Class: rviz/Path
           Color: 114; 159; 207
@@ -495,8 +495,8 @@ Visualization Manager:
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
-          Line Style: Lines
-          Line Width: 0.10000000149011612
+          Line Style: Billboards
+          Line Width: 0.05000000074505806
           Name: PathGlb
           Offset:
             X: 0
@@ -541,7 +541,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 5.649036884307861
+      Distance: 4.7594757080078125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
