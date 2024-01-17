@@ -56,16 +56,14 @@ void downsampleVoxel(pcl::PointCloud<PointType>& pc, double voxel_size) {
   }
 }
 
-std::pair<double, double> getWidthHeight(pcl::PointCloud<PointType>::Ptr& pc,
-                                         const pcl::PointXYZ&             center,
-                                         const Eigen::Vector3d&           normal) {
+std::pair<double, double> SinglePlane::getWidthHeight() const {
   pcl::PointCloud<pcl::PointXYZ>::Ptr pc_projected(new pcl::PointCloud<pcl::PointXYZ>);
-  pc_projected->resize(pc->size());
-  for (auto& p : pc->points) {
+  pc_projected->resize(this->cloud.size());
+  for (auto& p : this->cloud.points) {
     pcl::PointXYZ pp;
-    pp.x = p.x - center.x;
-    pp.y = p.y - center.y;
-    pp.z = p.z - center.z;
+    pp.x = p.x - this->p_center.x;
+    pp.y = p.y - this->p_center.y;
+    pp.z = p.z - this->p_center.z;
     pc_projected->push_back(pp);
   }
 
@@ -87,4 +85,11 @@ std::pair<double, double> getWidthHeight(pcl::PointCloud<PointType>::Ptr& pc,
   }
 
   return std::make_pair(width, height);
+}
+
+Eigen::Quaterniond SinglePlane::getQuaternion() const {
+  Eigen::Vector3d    rot_axis  = Eigen::Vector3d::UnitZ().cross(this->normal);
+  double             rot_angle = acos(Eigen::Vector3d::UnitZ().dot(this->normal));
+  Eigen::Quaterniond q(Eigen::AngleAxisd(rot_angle, rot_axis));
+  return q;
 }

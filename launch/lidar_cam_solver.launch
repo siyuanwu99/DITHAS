@@ -3,21 +3,22 @@
   <env name="ROSCONSOLE_FORMAT" value="[${node}][${time:%H:%M:%S%F}][${severity}]:${message}"/>
 
   <group ns="swarm158">
-    <node pkg="dithas" type="plane_segmentation" name="dithas_odom" output="screen">
+    <node pkg="dithas" type="plane_segmentation" name="dithas_detector" output="log">
       <param name="ransac_dis_thres" value="0.1"/>
       <remap from="~point_cloud" to="/cloud_registered"/>
-      <remap from="~plane_odom" to="/swarm158/dithas_odom/tag_odom"/>
+      <remap from="~plane_pose" to="/swarm158/dithas/tag_pose"/>
     </node>
   </group>
 
   <group ns="swarm155">
-    <node pkg="dithas" type="dithas_odom" name="dithas_odom" output="screen">
+    <node pkg="dithas" type="dithas_path" name="dithas_detector" output="screen">
       <rosparam file="$(find dithas)/config/body2cam.yaml" command="load"/>
       <remap from="~tag_detections" to="/tag_detections"/>
+      <remap from="~tag_pose" to="/swarm155/dithas/tag_pose"/>
     </node>
-    <node pkg="dithas" type="dithas_solve_test" name="dithas_solver" output="screen">
-      <remap from="~tag_odom_self" to="/swarm155/dithas_odom/tag_odom"/>
-      <remap from="~tag_odom_glbl" to="/swarm158/dithas_odom/tag_odom"/>
+    <node pkg="dithas" type="dithas_pose_solve" name="dithas_solver" output="screen">
+      <remap from="~tag_pose_self" to="/swarm155/dithas/tag_pose"/>
+      <remap from="~tag_pose_glbl" to="/swarm158/dithas/tag_pose"/>
     </node>
   </group>
 

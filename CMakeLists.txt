@@ -63,6 +63,12 @@ add_dependencies(${PROJECT_NAME}_solve_test ${${PROJECT_NAME}_EXPORTED_TARGETS}
 target_link_libraries(${PROJECT_NAME}_solve_test ${PROJECT_NAME}_lib
                       ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
 
+add_executable(${PROJECT_NAME}_pose_solve src/pose_solve.cpp)
+add_dependencies(${PROJECT_NAME}_pose_solve ${${PROJECT_NAME}_EXPORTED_TARGETS}
+                 ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_pose_solve ${PROJECT_NAME}_lib
+                      ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES})
+
 add_executable(consensus_solver src/consensus_solver.cpp)
 add_dependencies(consensus_solver ${${PROJECT_NAME}_EXPORTED_TARGETS}
                  ${catkin_EXPORTED_TARGETS})

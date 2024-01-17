@@ -11,6 +11,7 @@
 
 #include <dithas/lidar_common.h>
 #include <dithas/utils.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/common/io.h>
@@ -45,6 +46,7 @@ ros::Publisher plane_pub_;
 ros::Publisher selected_plane_pub_;
 ros::Publisher color_plane_pub_;
 ros::Publisher pose_pub_;
+ros::Publisher odom_pub_;
 
 /* Global parameters */
 int   plane_max_num_(5);
@@ -219,8 +221,8 @@ void extractLiDARPlane(const pcl::PointCloud<pcl::PointXYZI>::Ptr& lidar_cloud, 
     single_plane.normal << coefficients->values[0], coefficients->values[1],
         coefficients->values[2];
 
-    std::pair<double, double> width_height =
-        getWidthHeight(cloud_cluster, p_center, single_plane.normal);
+    std::pair<double, double> width_height = single_plane.getWidthHeight();
+
     single_plane.width  = width_height.first;
     single_plane.height = width_height.second;
 
@@ -252,10 +254,10 @@ void filterPLane(const std::vector<SinglePlane>& plane_lists, float board_size) 
   return;
 }
 
-void visualizePlane(const SinglePlane& plane) {
+void visualizePlane(const SinglePlane& plane, ros::Time stamp) {
   visualization_msgs::Marker marker;
   marker.header.frame_id = "camera_init";
-  marker.header.stamp    = ros::Time::now();
+  marker.header.stamp    = stamp;
 
   marker.id     = 0;
   marker.type   = visualization_msgs::Marker::CUBE;
@@ -266,9 +268,7 @@ void visualizePlane(const SinglePlane& plane) {
   marker.pose.position.z = plane.p_center.z;
 
   // Use normal to calculate the orientation
-  Eigen::Vector3d    rot_axis = Eigen::Vector3d::UnitZ().cross(plane.normal);
-  double             angle    = acos(Eigen::Vector3d::UnitZ().dot(plane.normal));
-  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, rot_axis));
+  Eigen::Quaterniond q = plane.getQuaternion();
 
   marker.pose.orientation.x = q.x();
   marker.pose.orientation.y = q.y();
@@ -285,6 +285,33 @@ void visualizePlane(const SinglePlane& plane) {
   marker.color.b = 0.0;
   // marker.lifetime = ros::Duration(1.0);
   selected_plane_pub_.publish(marker);
+}
+
+void publishPose(const SinglePlane& plane, const ros::Time& stamp) {
+  Eigen::Quaterniond         q = plane.getQuaternion();
+  geometry_msgs::PoseStamped pose_msg;
+  pose_msg.header.frame_id    = "map";
+  pose_msg.header.stamp       = stamp;
+  pose_msg.pose.position.x    = plane.p_center.x;
+  pose_msg.pose.position.y    = plane.p_center.y;
+  pose_msg.pose.position.z    = plane.p_center.z;
+  pose_msg.pose.orientation.w = q.w();
+  pose_msg.pose.orientation.x = q.x();
+  pose_msg.pose.orientation.y = q.y();
+  pose_msg.pose.orientation.z = q.z();
+  pose_pub_.publish(pose_msg);
+
+  nav_msgs::Odometry odom_msg;
+  odom_msg.header.frame_id         = "map";
+  odom_msg.header.stamp            = stamp;
+  odom_msg.pose.pose.position.x    = plane.p_center.x;
+  odom_msg.pose.pose.position.y    = plane.p_center.y;
+  odom_msg.pose.pose.position.z    = plane.p_center.z;
+  odom_msg.pose.pose.orientation.w = q.w();
+  odom_msg.pose.pose.orientation.x = q.x();
+  odom_msg.pose.pose.orientation.y = q.y();
+  odom_msg.pose.pose.orientation.z = q.z();
+  odom_pub_.publish(odom_msg);
 }
 
 /**
@@ -326,29 +353,15 @@ void lidarCallback(const sensor_msgs::PointCloud2ConstPtr& msg) {
   /** 3. filter out the desired board and calculate the center */
   // filterPlanes(plane_lists, board_size_);
   SinglePlane selected_plane = plane_lists.top();
-  visualizePlane(selected_plane);
+  visualizePlane(selected_plane, ros::Time::now());
   ROS_INFO_STREAM("Filtering Lidar Plane Time: " << (ros::Time::now() - start).toSec() * 1000
                                                  << " ms");
 
   /** 3. EKF track board trajectories */
+  // TODO(Siyuan WU)
 
   /** 4. publish the center of the plane */
-  nav_msgs::Odometry pose_msg;
-  pose_msg.header.frame_id         = "map";
-  pose_msg.header.stamp            = ros::Time::now();
-  pose_msg.pose.pose.position.x    = selected_plane.p_center.x;
-  pose_msg.pose.pose.position.y    = selected_plane.p_center.y;
-  pose_msg.pose.pose.position.z    = selected_plane.p_center.z;
-  pose_msg.pose.pose.orientation.w = 1.0;
-
-  Eigen::Vector3d    rot_axis = Eigen::Vector3d::UnitX().cross(selected_plane.normal);
-  double             angle    = acos(Eigen::Vector3d::UnitX().dot(selected_plane.normal));
-  Eigen::Quaterniond q(Eigen::AngleAxisd(angle, rot_axis));
-  pose_msg.pose.pose.orientation.x = q.x();
-  pose_msg.pose.pose.orientation.y = q.y();
-  pose_msg.pose.pose.orientation.z = q.z();
-  pose_msg.pose.pose.orientation.w = q.w();
-  pose_pub_.publish(pose_msg);
+  publishPose(selected_plane, msg->header.stamp);
 }
 
 int main(int argc, char* argv[]) {
@@ -370,7 +383,8 @@ int main(int argc, char* argv[]) {
   ros::Subscriber sub = nh.subscribe("point_cloud", 1, lidarCallback);
 
   plane_pub_       = nh.advertise<sensor_msgs::PointCloud2>("/voxel_plane", 100);
-  pose_pub_        = nh.advertise<nav_msgs::Odometry>("plane_odom", 100);
+  odom_pub_        = nh.advertise<nav_msgs::Odometry>("plane_odom", 100);
+  pose_pub_        = nh.advertise<geometry_msgs::PoseStamped>("plane_pose", 100);
   color_plane_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/color_cloud", 100);
 
   selected_plane_pub_ = nh.advertise<visualization_msgs::Marker>("/selected_plane", 100);

@@ -47,7 +47,7 @@ void tagCallback(const apriltag_ros::AprilTagDetectionArray &msg) {
     Eigen::Quaterniond rot_tag2world = Eigen::Quaterniond(tf_tag2world.matrix().block<3, 3>(0, 0));
 
     geometry_msgs::PoseStamped pose_msg;
-    pose_msg.header.stamp       = ros::Time::now();
+    pose_msg.header.stamp       = msg.header.stamp;
     pose_msg.header.frame_id    = "map";
     pose_msg.pose.position.x    = tf_tag2world.matrix()(0, 3);
     pose_msg.pose.position.y    = tf_tag2world.matrix()(1, 3);
